@@ -9,6 +9,5 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/rural-api .
 COPY .env* .
-COPY internal/delivery/http/templates ./internal/delivery/http/templates
 EXPOSE 8080
 CMD ["./rural-api"]
