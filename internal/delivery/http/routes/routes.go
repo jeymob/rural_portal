@@ -35,7 +35,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
 	protected.Use(middleware.AuthMiddleware(cfg)) // ← ШАГ 3: подключаем проверку токена ко всей группе
 
 	// Теперь любой роут внутри этой группы будет проверять токен
-	//protected.GET("/me", handlers.GetMe(db)) // информация о себе
+	protected.GET("/me", handlers.GetMe(db)) // информация о себе
 
 	// Можно создать ещё одну группу только для админов
 	admin := protected.Group("/admin")      // /api/admin/...
