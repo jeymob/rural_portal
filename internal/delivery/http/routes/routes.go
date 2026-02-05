@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/jeymob/rural-portal/internal/auth"
 	"github.com/jeymob/rural-portal/internal/config"
 	"github.com/jeymob/rural-portal/internal/delivery/http/handlers"
 
@@ -23,6 +24,15 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
 	r.POST("/api/register", handlers.Register(db, cfg))
 	r.POST("/api/login", handlers.Login(db, cfg))
 	r.GET("/api/health", handlers.HealthCheck) // например
+	//r.POST("/api/refresh", handlers.Refresh(db, cfg))
+
+	// Открытые роуты для Яндекс OAuth
+	r.GET("/api/auth/yandex", auth.YandexLogin(cfg))
+	r.GET("/api/auth/yandex/callback", auth.YandexCallback(db, cfg))
+
+	// Открытые роуты для ВК OAuth
+	r.GET("/api/auth/vk", auth.VkLogin(cfg))
+	r.GET("/api/auth/vk/callback", auth.VkCallback(db, cfg))
 
 	// Вот начинается самое важное — группа защищённых роутов
 	protected := r.Group("/api")                  // все роуты будут начинаться с /api/...

@@ -57,29 +57,8 @@ func RunServer(cfg *config.Config, db *gorm.DB, sqlDB *sql.DB) error {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Главная страница (HTML с шаблонами)
-	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"Title":   "Главная — Сельский Портал",
-			"Version": "0.1.0-mvp",
-		})
-	})
-
 	// Подключаем дополнительные роуты
 	routes.SetupRoutes(r, db, cfg)
-
-	// Health-check для Kubernetes
-	r.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-	})
-
-	r.GET("/readyz", func(c *gin.Context) {
-		if err := sqlDB.Ping(); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not ready", "error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ready"})
-	})
 
 	r.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{

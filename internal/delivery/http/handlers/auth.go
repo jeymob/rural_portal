@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -78,7 +80,6 @@ func Register(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
-// Login — вход пользователя
 func Login(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input LoginInput
@@ -93,20 +94,76 @@ func Login(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Проверяем пароль
 		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Неверный email или пароль"})
 			return
 		}
 
-		// Создаём токен
-		tokenString, err := generateJWT(user.ID, user.Role, cfg.JWTSecret)
+		accessToken, _ := generateJWT(user.ID, user.Role, cfg.JWTSecret)
+
+		// Генерируем refresh-токен (лучше использовать uuid)
+		refreshToken := uuid.New().String()
+
+		// Сохраняем в базу
+		db.Create(&models.RefreshToken{
+			UserID:    user.ID,
+			Token:     refreshToken,
+			ExpiresAt: time.Now().Add(30 * 24 * time.Hour), // 30 дней
+		})
+
+		// Устанавливаем HttpOnly cookie
+		c.SetCookie(
+			"refresh_token",
+			refreshToken,
+			30*24*60*60, // 30 дней
+			"/",
+			"",   // домен (пустой = текущий)
+			true, // Secure — в продакшене true (только HTTPS)
+			true, // HttpOnly — JS не видит
+		)
+
+		c.JSON(http.StatusOK, gin.H{
+			"access_token": accessToken,
+		})
+	}
+}
+
+func Refresh(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		refreshToken, err := c.Cookie("refresh_token")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания токена"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh-токен не найден"})
 			return
 		}
 
-		c.JSON(http.StatusOK, AuthResponse{Token: tokenString})
+		var rt models.RefreshToken
+		if err := db.Where("token = ? AND revoked = ? AND expires_at > ?", refreshToken, false, time.Now()).
+			First(&rt).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Недействительный или просроченный refresh-токен"})
+			return
+		}
+
+		var user models.User
+		if err := db.First(&user, rt.UserID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Пользователь не найден"})
+			return
+		}
+
+		// Выдаём новый access-токен
+		newAccessToken, _ := generateJWT(user.ID, user.Role, cfg.JWTSecret)
+
+		// Можно выдать новый refresh-токен (рекомендуется для ротации)
+		newRefreshToken := uuid.New().String()
+		db.Model(&rt).Updates(models.RefreshToken{
+			Token:     newRefreshToken,
+			ExpiresAt: time.Now().Add(30 * 24 * time.Hour),
+		})
+
+		c.SetCookie("refresh_token", newRefreshToken, 30*24*60*60, "/", "", true, true)
+
+		c.JSON(http.StatusOK, gin.H{
+			"access_token": newAccessToken,
+		})
 	}
 }
 
