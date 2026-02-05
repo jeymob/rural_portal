@@ -20,11 +20,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
 		})
 	})
 
-	// Открытые роуты — сюда может зайти любой, без токена
-	r.POST("/api/register", handlers.Register(db, cfg))
-	r.POST("/api/login", handlers.Login(db, cfg))
 	r.GET("/api/health", handlers.HealthCheck) // например
-	//r.POST("/api/refresh", handlers.Refresh(db, cfg))
 
 	// Открытые роуты для Яндекс OAuth
 	r.GET("/api/auth/yandex", auth.YandexLogin(cfg))
@@ -39,10 +35,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
 	protected.Use(middleware.AuthMiddleware(cfg)) // ← ШАГ 3: подключаем проверку токена ко всей группе
 
 	// Теперь любой роут внутри этой группы будет проверять токен
-	protected.GET("/me", handlers.GetMe(db)) // информация о себе
+	//protected.GET("/me", handlers.GetMe(db)) // информация о себе
 
 	// Можно создать ещё одну группу только для админов
-	admin := protected.Group("/admin")            // /api/admin/...
-	admin.Use(middleware.AdminMiddleware())       // дополнительная проверка роли
-	admin.GET("/users", handlers.GetAllUsers(db)) // список всех пользователей — только админ
+	admin := protected.Group("/admin")      // /api/admin/...
+	admin.Use(middleware.AdminMiddleware()) // дополнительная проверка роли
 }
