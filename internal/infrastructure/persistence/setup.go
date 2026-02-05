@@ -34,12 +34,9 @@ func InitDB(cfg *config.Config) (*gorm.DB, *sql.DB, error) {
 	db.Model(&models.User{}).Where("role = ?", "admin").Count(&adminCount)
 	if adminCount == 0 {
 		admin := &models.User{
-			Username: "admin",
-			Email:    "admin@rural.local",
-			Password: "admin123",
-			Role:     "admin",
-			Region:   "Вся Россия",
-			Phone:    "+7 (999) 123-45-67",
+			Name:   "admin",
+			Role:   "admin",
+			Region: "Вся Россия",
 		}
 		if err := db.Create(admin).Error; err != nil {
 			return nil, nil, err

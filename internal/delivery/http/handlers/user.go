@@ -10,10 +10,9 @@ import (
 
 func GetMe(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Достаём user_id из контекста (middleware уже проверил токен)
 		userID, exists := c.Get("user_id")
 		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Не удалось определить пользователя"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Не авторизован"})
 			return
 		}
 
@@ -23,14 +22,6 @@ func GetMe(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Возвращаем данные без пароля
-		c.JSON(http.StatusOK, gin.H{
-			//"id":       user.ID,
-			"username": user.Username,
-			//"email":    user.Email,
-			//"phone":    user.Phone,
-			//"region":   user.Region,
-			//"role":     user.Role,
-		})
+		c.JSON(http.StatusOK, user)
 	}
 }

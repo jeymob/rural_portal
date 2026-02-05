@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"database/sql"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -30,22 +28,6 @@ func RunServer(cfg *config.Config, db *gorm.DB, sqlDB *sql.DB) error {
 	// Проверяем и загружаем шаблоны
 	wd, _ := os.Getwd()
 	log.Printf("📂 Рабочая директория: %s", wd)
-
-	templatePath := "internal/delivery/http/templates"
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		log.Printf("⚠️  Папка с шаблонами НЕ НАЙДЕНА: %s (продолжаем без HTML-шаблонов)", templatePath)
-	} else {
-		indexPath := filepath.Join(templatePath, "index.html")
-		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-			log.Printf("⚠️  index.html НЕ НАЙДЕН: %s", indexPath)
-		} else {
-			log.Println("✅ index.html найден")
-			templates := template.Must(template.ParseGlob("internal/delivery/http/templates/*.html"))
-			templates = template.Must(templates.ParseGlob("internal/delivery/http/templates/partials/*.html"))
-			r.SetHTMLTemplate(templates)
-			log.Println("✅ Шаблоны успешно загружены")
-		}
-	}
 
 	// Настройка CORS — разрешаем запросы с фронта
 	r.Use(cors.New(cors.Config{

@@ -92,9 +92,8 @@ func VkCallback(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 
 		if err == gorm.ErrRecordNotFound {
 			user = models.User{
-				Username: fmt.Sprintf("%s %s", vkUser.FirstName, vkUser.LastName),
-				Email:    email,
-				Role:     "user",
+				Name: fmt.Sprintf("%s %s", vkUser.FirstName, vkUser.LastName),
+				Role: "user",
 			}
 			db.Create(&user)
 		}
