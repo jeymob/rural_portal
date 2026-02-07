@@ -3,9 +3,10 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -66,66 +67,54 @@ func YandexCallback(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// Получаем сохранённый state из cookie
 		expectedState, err := c.Cookie("oauth_state")
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Отсутствует сохранённый state (возможно, cookie не передалась)"})
+		if err != nil || receivedState != expectedState {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный state"})
 			return
 		}
 
-		// Проверяем, что пришедший state совпадает с сохранённым
-		if receivedState == "" || receivedState != expectedState {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный или отсутствующий state-параметр"})
-			return
-		}
-
-		// Удаляем state-cookie после проверки (не нужен больше)
 		c.SetCookie("oauth_state", "", -1, "/", "", false, true)
 
 		oauthConfig := YandexOAuthConfig(cfg)
-
-		// Обмен кода на токен
 		token, err := oauthConfig.Exchange(c.Request.Context(), code)
 		if err != nil {
-			log.Printf("Ошибка обмена кода на токен: %v", err)
+			log.Printf("Ошибка обмена кода: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации"})
 			return
 		}
 
-		// Получаем данные пользователя
 		client := oauthConfig.Client(context.Background(), token)
 		resp, err := client.Get("https://login.yandex.ru/info?format=json")
 		if err != nil {
-			log.Printf("Ошибка получения данных от Яндекса: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения профиля"})
+			log.Printf("Ошибка получения данных: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка профиля"})
 			return
 		}
 		defer resp.Body.Close()
 
 		var yandexUser struct {
-			ID            string `json:"id"`
-			Login         string `json:"login"`
-			DefaultEmail  string `json:"default_email"`
-			DisplayName   string `json:"display_name"`
-			DefaultAvatar string `json:"default_avatar_id"`
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(&yandexUser); err != nil {
-			log.Printf("Ошибка парсинга ответа Яндекса: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обработки данных"})
+			log.Printf("Ошибка парсинга: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка данных"})
 			return
 		}
 
-		// Ищем пользователя по yandex_id
 		var user models.User
 		err = db.Where("yandex_id = ?", yandexUser.ID).First(&user).Error
 
-		if err == gorm.ErrRecordNotFound {
-			// Новый пользователь
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			user = models.User{
 				YandexID: yandexUser.ID,
 				Name:     yandexUser.DisplayName,
 				Role:     "user",
+			}
+
+			if user.Name == "" {
+				user.Name = "Пользователь"
 			}
 
 			if err := db.Create(&user).Error; err != nil {
@@ -133,36 +122,37 @@ func YandexCallback(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания аккаунта"})
 				return
 			}
-		} else if err != nil {
-			log.Printf("Ошибка поиска пользователя: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка базы данных"})
+		} else if err == nil {
+			// Обновляем имя, если изменилось
+			newName := yandexUser.DisplayName
+			if user.Name != newName {
+				user.Name = newName
+				db.Save(&user)
+			}
+		} else {
+			log.Printf("Ошибка поиска: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка базы"})
 			return
 		}
 
-		// Генерируем свой access-токен
 		accessToken, err := utils.GenerateAccessToken(user.ID, user.Name, cfg.JWTSecret)
 		if err != nil {
-			log.Printf("Ошибка генерации токена: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания сессии"})
+			log.Printf("Ошибка токена: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка сессии"})
 			return
 		}
 
-		// Замени SetCookie на это:
-		redirectURL := fmt.Sprintf("http://localhost:5173/?access_token=%s", accessToken)
-		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
-
-		/*// Сохраняем токен в HttpOnly cookie (рекомендуется)
+		// Кладём токен в HttpOnly cookie
 		c.SetCookie(
 			"access_token",
 			accessToken,
-			3600*24*7, // 7 дней
+			900,
 			"/",
 			"",
-			false, // Secure = true в продакшене
-			true,  // HttpOnly
+			strings.HasPrefix(cfg.FrontendURL, "https://"), // Secure только на https
+			true,
 		)
 
-		// Редирект на главную без параметров в URL
-		c.Redirect(http.StatusTemporaryRedirect, "http://localhost:5173/")*/
+		c.Redirect(http.StatusTemporaryRedirect, cfg.FrontendURL)
 	}
 }

@@ -19,6 +19,8 @@ type Config struct {
 	VkClientID     string `env:"VK_CLIENT_ID"`
 	VkClientSecret string `env:"VK_CLIENT_SECRET"`
 	VkRedirectURI  string `env:"VK_REDIRECT_URI"`
+
+	FrontendURL string `env:"FRONTEND_URL" envDefault:"http://localhost:5173"`
 }
 
 func Load() *Config {
@@ -36,6 +38,7 @@ func Load() *Config {
 		VkClientID:     getEnv("VK_CLIENT_ID", ""),
 		VkClientSecret: getEnv("VK_CLIENT_SECRET", ""),
 		VkRedirectURI:  getEnv("VK_REDIRECT_URI", "http://localhost:8080/api/auth/vk/callback"),
+		FrontendURL:    getEnv("FRONTEND_URL", "http://localhost:5173"),
 	}
 
 	if cfg.DatabaseURL == "" {

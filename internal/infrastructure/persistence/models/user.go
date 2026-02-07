@@ -4,9 +4,9 @@ import "gorm.io/gorm"
 
 type User struct {
 	gorm.Model
-	YandexID string `gorm:"uniqueIndex;size:64"` // uniqueIndex — создаёт индекс, а не constraint unique на уровне БД
-	VkID     string `gorm:"uniqueIndex;size:64"`
-	Name     string `gorm:"unique;not null;size:100"`
-	Role     string `gorm:"default:'user';size:20"`
+	YandexID string `gorm:"size:64;index"`     // индекс для быстрого поиска, НЕ unique
+	VkID     string `gorm:"size:64;index"`     // индекс для быстрого поиска, НЕ unique
+	Name     string `gorm:"size:100;not null"` // имя, которое отображается на сайте
 	Region   string `gorm:"size:200"`
+	Role     string `gorm:"size:20;default:'user'"`
 }
